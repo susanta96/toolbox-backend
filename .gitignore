@@ -1,0 +1,26 @@
+# Binaries
+bin/
+tmp/
+*.exe
+
+# Environment
+.env
+
+# File storage
+uploads/
+generated/
+
+# Test/Coverage
+coverage.out
+coverage.html
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+vendor/

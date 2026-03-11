@@ -1,0 +1,47 @@
+# Air configuration — https://github.com/air-verse/air
+# Go live-reload (like nodemon for Node.js)
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  # Build command — kills leftover server.exe then builds (PowerShell wrapper for Windows)
+  cmd = "powershell.exe -ExecutionPolicy Bypass -File ./scripts/build.ps1"
+  # Entry point binary to run after build
+  entrypoint = ["./tmp/server.exe"]
+  # Watch these extensions
+  include_ext = ["go", "toml", "env"]
+  # Ignore these directories
+  exclude_dir = ["tmp", "bin", "uploads", "generated", "vendor", "node_modules", ".git", ".vscode", ".idea"]
+  # Ignore these files
+  exclude_file = []
+  # Ignore unchanged files
+  exclude_unchanged = true
+  # Follow symlinks
+  follow_symlink = false
+  # Delay after file change before rebuild (ms)
+  delay = 1000
+  # Kill old process before starting new one — critical for Windows port release
+  kill_delay = 500
+  # Send interrupt signal first, then kill
+  send_interrupt = true
+  # Rerun on build error
+  rerun = false
+  # Stop on build error
+  stop_on_error = true
+
+[log]
+  # Show timestamp in log
+  time = true
+  # Log only main messages
+  main_only = false
+
+[color]
+  main = "magenta"
+  watcher = "cyan"
+  build = "yellow"
+  runner = "green"
+
+[misc]
+  # Delete tmp dir on exit
+  clean_on_exit = true
