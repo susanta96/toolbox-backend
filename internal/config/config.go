@@ -23,6 +23,8 @@ type Config struct {
 	FXWarmupLimit   int
 	FXHTTPTimeout   time.Duration
 	FXHistoryKeep   time.Duration
+	RateLimitRPM    int
+	RateLimitWindow time.Duration
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -43,6 +45,8 @@ func Load() *Config {
 		FXWarmupLimit:   int(getEnvInt("FX_WARMUP_LIMIT", 30)),
 		FXHTTPTimeout:   getEnvDuration("FX_HTTP_TIMEOUT", 8*time.Second),
 		FXHistoryKeep:   getEnvDuration("FX_HISTORY_KEEP", 8760*time.Hour),
+		RateLimitRPM:    int(getEnvInt("RATE_LIMIT_RPM", 60)),
+		RateLimitWindow: getEnvDuration("RATE_LIMIT_WINDOW", 1*time.Minute),
 	}
 }
 

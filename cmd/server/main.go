@@ -74,7 +74,7 @@ func main() {
 	pdfHandler := handler.NewPDFHandler(pdfService, fileRepo, cfg.UploadDir, cfg.FileRetention, cfg.MaxMergeFiles)
 	currencyHandler := handler.NewCurrencyHandler(currencyService)
 	maxBodyBytes := cfg.MaxUploadSizeMB * 1024 * 1024
-	router := handler.NewRouter(pdfHandler, currencyHandler, maxBodyBytes)
+	router := handler.NewRouter(pdfHandler, currencyHandler, maxBodyBytes, cfg.RateLimitRPM, cfg.RateLimitWindow)
 
 	// Cleanup scheduler — removes expired files from disk + expired DB records
 	cleanup := scheduler.NewCleanup(fileRepo, []string{cfg.UploadDir, cfg.GeneratedDir}, cfg.FileRetention)

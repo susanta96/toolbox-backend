@@ -2,14 +2,16 @@ package handler
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
+	"github.com/go-chi/httprate"
 	"github.com/susanta96/toolbox-backend/internal/middleware"
 )
 
 // NewRouter sets up all HTTP routes and middleware.
-func NewRouter(pdfHandler *PDFHandler, currencyHandler *CurrencyHandler, maxBodyBytes int64) *chi.Mux {
+func NewRouter(pdfHandler *PDFHandler, currencyHandler *CurrencyHandler, maxBodyBytes int64, rateLimitRPM int, rateLimitWindow time.Duration) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -24,6 +26,9 @@ func NewRouter(pdfHandler *PDFHandler, currencyHandler *CurrencyHandler, maxBody
 		MaxAge:           300,
 	}))
 	r.Use(middleware.MaxBodySize(maxBodyBytes))
+
+	// Rate limiting — per-IP sliding window
+	r.Use(httprate.LimitByIP(rateLimitRPM, rateLimitWindow))
 
 	// Routes
 	r.Get("/hello", Hello)
