@@ -58,16 +58,34 @@ func main() {
 
 	// Repository
 	fileRepo := repository.NewFileRecordRepository(pool)
+	exchangeRateRepo := repository.NewExchangeRateRepository(pool)
+
+	// Currency provider/service
+	fxProvider := service.NewFrankfurterProvider(cfg.FXProviderURL, cfg.FXHTTPTimeout)
+	currencyService := service.NewCurrencyService(
+		exchangeRateRepo,
+		fxProvider,
+		cfg.FXCacheTTL,
+		cfg.FXStaleWindow,
+		cfg.FXHistoryKeep,
+	)
 
 	// Handlers
 	pdfHandler := handler.NewPDFHandler(pdfService, fileRepo, cfg.UploadDir, cfg.FileRetention, cfg.MaxMergeFiles)
+	currencyHandler := handler.NewCurrencyHandler(currencyService)
 	maxBodyBytes := cfg.MaxUploadSizeMB * 1024 * 1024
-	router := handler.NewRouter(pdfHandler, maxBodyBytes)
+	router := handler.NewRouter(pdfHandler, currencyHandler, maxBodyBytes)
 
 	// Cleanup scheduler — removes expired files from disk + expired DB records
 	cleanup := scheduler.NewCleanup(fileRepo, []string{cfg.UploadDir, cfg.GeneratedDir}, cfg.FileRetention)
 	if err := cleanup.Start(cfg.CleanupInterval); err != nil {
 		slog.Error("failed to start cleanup scheduler", "error", err)
+		os.Exit(1)
+	}
+
+	currencyWarmup := scheduler.NewCurrencyWarmup(currencyService, cfg.FXWarmupLimit)
+	if err := currencyWarmup.Start(cfg.FXWarmupEvery); err != nil {
+		slog.Error("failed to start currency warmup scheduler", "error", err)
 		os.Exit(1)
 	}
 
@@ -96,6 +114,7 @@ func main() {
 	slog.Info("shutting down server", "signal", sig.String())
 
 	cleanup.Stop()
+	currencyWarmup.Stop()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

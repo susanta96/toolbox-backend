@@ -9,6 +9,9 @@ A Go REST API for PDF utilities — lock (encrypt), unlock (decrypt), compress, 
 - **Compress PDF** — Reduce PDF file size with configurable quality levels (low / medium / high / maximum)
 - **Merge PDF** — Combine multiple PDF files into one (up to 10 files, configurable)
 - **Split PDF** — Split a PDF into individual pages or custom page ranges (output as ZIP)
+- **Currency Convert** — Convert between top global currencies with rate source metadata
+- **Currency History** — Fetch historical FX series with daily/weekly/monthly aggregation
+- **FX cache + warmup** — In-memory + Postgres-backed caching with scheduled warmup
 - **Auto-cleanup** — Cron job removes uploaded/generated files older than 1 hour
 - **PostgreSQL** — Tracks file records via Neon cloud Postgres
 - **Download API** — Retrieve processed files via secure download endpoint
@@ -86,6 +89,13 @@ make run
 | `MAX_MERGE_FILES`    | `10`        | Max number of files for merge      |
 | `CLEANUP_INTERVAL` | `10m`         | How often cleanup runs             |
 | `FILE_RETENTION`   | `1h`          | How long files are kept            |
+| `FX_PROVIDER_URL`  | `https://api.frankfurter.dev` | FX data provider base URL |
+| `FX_CACHE_TTL`     | `30m`         | Fresh cache TTL for FX rates       |
+| `FX_STALE_WINDOW`  | `6h`          | Allowed stale window if provider fails |
+| `FX_WARMUP_EVERY`  | `30m`         | Warmup scheduler interval          |
+| `FX_WARMUP_LIMIT`  | `30`          | Max most-requested pairs to warm each run |
+| `FX_HTTP_TIMEOUT`  | `8s`          | HTTP timeout for provider calls    |
+| `FX_HISTORY_KEEP`  | `8760h`       | Historical retention window (12 months) |
 
 ## API Endpoints
 
@@ -241,6 +251,127 @@ curl -X POST http://localhost:8080/api/v1/pdf/split \
     "split_count": 3
   }
 }
+```
+
+### `GET /api/v1/currency/supported`
+Returns top supported currencies for the UI selector.
+
+```bash
+curl "http://localhost:8080/api/v1/currency/supported"
+```
+
+```json
+{
+  "message": "Supported currencies fetched",
+  "data": {
+    "currencies": [
+      { "code": "USD", "name": "US Dollar" },
+      { "code": "INR", "name": "Indian Rupee" },
+      { "code": "EUR", "name": "Euro" }
+    ]
+  }
+}
+```
+
+### `GET /api/v1/currency/convert`
+Converts amount from one currency to another.
+
+**Query params:**
+- `from` (required): 3-letter currency code (for example `USD`)
+- `to` (required): 3-letter currency code (for example `INR`)
+- `amount` (required): non-negative number
+
+```bash
+curl "http://localhost:8080/api/v1/currency/convert?from=USD&to=INR&amount=100"
+```
+
+```json
+{
+  "message": "Conversion successful",
+  "data": {
+    "from": "USD",
+    "to": "INR",
+    "amount": 100,
+    "rate": 83.12,
+    "converted": 8312,
+    "source": "provider",
+    "stale": false,
+    "updated_at": "2026-03-23T00:00:00Z"
+  }
+}
+```
+
+**Notes:**
+- `source` can be `cache`, `db`, or `provider`.
+- `stale=true` means provider was unavailable and a recent fallback rate was used.
+
+### `GET /api/v1/currency/historical`
+Returns historical points for a pair and aggregation mode.
+
+**Query params:**
+- `from` (required): 3-letter currency code
+- `to` (required): 3-letter currency code
+- `range` (optional): number of days with `d` suffix (`7d`, `30d`, `90d`, `365d`), default `30d`
+- `aggregation` (optional): `daily` (default), `weekly`, or `monthly`
+
+```bash
+curl "http://localhost:8080/api/v1/currency/historical?from=USD&to=INR&range=30d&aggregation=daily"
+```
+
+```json
+{
+  "message": "Historical rates fetched",
+  "data": {
+    "from": "USD",
+    "to": "INR",
+    "aggregation": "daily",
+    "source": "db",
+    "stale": false,
+    "updated_at": "2026-03-23T09:05:00Z",
+    "points": [
+      { "date": "2026-03-20", "rate": 83.05 },
+      { "date": "2026-03-21", "rate": 83.11 },
+      { "date": "2026-03-22", "rate": 83.09 }
+    ]
+  }
+}
+```
+
+#### Currency API Error Cases
+
+```json
+{ "error": "from, to and amount are required" }
+```
+
+```json
+{ "error": "amount must be a valid non-negative number" }
+```
+
+```json
+{ "error": "aggregation must be one of daily, weekly, monthly" }
+```
+
+```json
+{ "error": "invalid range value, expected format like 7d, 30d, 90d, 365d" }
+```
+
+```json
+{ "error": "rate currently unavailable" }
+```
+
+## Currency API Quick Usage
+
+1. Fetch selectable currencies:
+```bash
+curl "http://localhost:8080/api/v1/currency/supported"
+```
+2. Convert an amount for current rate display:
+```bash
+curl "http://localhost:8080/api/v1/currency/convert?from=EUR&to=INR&amount=250"
+```
+3. Load chart data for history view (weekly or monthly works too):
+```bash
+curl "http://localhost:8080/api/v1/currency/historical?from=EUR&to=INR&range=90d&aggregation=weekly"
 ```
 
 ## Build & Test

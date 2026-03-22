@@ -16,6 +16,13 @@ type Config struct {
 	MaxMergeFiles   int
 	CleanupInterval time.Duration
 	FileRetention   time.Duration
+	FXProviderURL   string
+	FXCacheTTL      time.Duration
+	FXStaleWindow   time.Duration
+	FXWarmupEvery   time.Duration
+	FXWarmupLimit   int
+	FXHTTPTimeout   time.Duration
+	FXHistoryKeep   time.Duration
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -29,6 +36,13 @@ func Load() *Config {
 		MaxMergeFiles:   int(getEnvInt("MAX_MERGE_FILES", 10)),
 		CleanupInterval: getEnvDuration("CLEANUP_INTERVAL", 10*time.Minute),
 		FileRetention:   getEnvDuration("FILE_RETENTION", 1*time.Hour),
+		FXProviderURL:   getEnv("FX_PROVIDER_URL", "https://api.frankfurter.dev"),
+		FXCacheTTL:      getEnvDuration("FX_CACHE_TTL", 30*time.Minute),
+		FXStaleWindow:   getEnvDuration("FX_STALE_WINDOW", 6*time.Hour),
+		FXWarmupEvery:   getEnvDuration("FX_WARMUP_EVERY", 30*time.Minute),
+		FXWarmupLimit:   int(getEnvInt("FX_WARMUP_LIMIT", 30)),
+		FXHTTPTimeout:   getEnvDuration("FX_HTTP_TIMEOUT", 8*time.Second),
+		FXHistoryKeep:   getEnvDuration("FX_HISTORY_KEEP", 8760*time.Hour),
 	}
 }
 
