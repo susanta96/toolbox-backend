@@ -59,6 +59,7 @@ func main() {
 	// Repository
 	fileRepo := repository.NewFileRecordRepository(pool)
 	exchangeRateRepo := repository.NewExchangeRateRepository(pool)
+	pasteRepo := repository.NewPasteRepository(pool)
 
 	// Currency provider/service
 	fxProvider := service.NewFrankfurterProvider(cfg.FXProviderURL, cfg.FXHTTPTimeout)
@@ -69,12 +70,14 @@ func main() {
 		cfg.FXStaleWindow,
 		cfg.FXHistoryKeep,
 	)
+	pasteService := service.NewPasteService(pasteRepo)
 
 	// Handlers
 	pdfHandler := handler.NewPDFHandler(pdfService, fileRepo, cfg.UploadDir, cfg.FileRetention, cfg.MaxMergeFiles)
 	currencyHandler := handler.NewCurrencyHandler(currencyService)
+	pasteHandler := handler.NewPasteHandler(pasteService)
 	maxBodyBytes := cfg.MaxUploadSizeMB * 1024 * 1024
-	router := handler.NewRouter(pdfHandler, currencyHandler, maxBodyBytes, cfg.RateLimitRPM, cfg.RateLimitWindow)
+	router := handler.NewRouter(pdfHandler, currencyHandler, pasteHandler, maxBodyBytes, cfg.RateLimitRPM, cfg.RateLimitWindow)
 
 	// Cleanup scheduler — removes expired files from disk + expired DB records
 	cleanup := scheduler.NewCleanup(fileRepo, []string{cfg.UploadDir, cfg.GeneratedDir}, cfg.FileRetention)
@@ -86,6 +89,12 @@ func main() {
 	currencyWarmup := scheduler.NewCurrencyWarmup(currencyService, cfg.FXWarmupLimit)
 	if err := currencyWarmup.Start(cfg.FXWarmupEvery); err != nil {
 		slog.Error("failed to start currency warmup scheduler", "error", err)
+		os.Exit(1)
+	}
+
+	pasteCleanup := scheduler.NewPasteCleanup(pasteRepo)
+	if err := pasteCleanup.Start(cfg.CleanupInterval); err != nil {
+		slog.Error("failed to start paste cleanup scheduler", "error", err)
 		os.Exit(1)
 	}
 
@@ -115,6 +124,7 @@ func main() {
 
 	cleanup.Stop()
 	currencyWarmup.Stop()
+	pasteCleanup.Stop()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
