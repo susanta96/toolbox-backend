@@ -95,6 +95,23 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 		return fmt.Errorf("run migration (exchange_rates): %w", err)
 	}
 
+	pasteQuery := `
+	CREATE TABLE IF NOT EXISTS pastes (
+		id         VARCHAR(6)  PRIMARY KEY,
+		content    TEXT        NOT NULL,
+		language   VARCHAR(50) NOT NULL DEFAULT 'auto',
+		expires_at TIMESTAMPTZ,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		view_count INT         NOT NULL DEFAULT 0
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_pastes_expires_at ON pastes (expires_at) WHERE expires_at IS NOT NULL;
+	`
+
+	if _, err := pool.Exec(ctx, pasteQuery); err != nil {
+		return fmt.Errorf("run migration (pastes): %w", err)
+	}
+
 	slog.Info("database migrations completed")
 	return nil
 }
