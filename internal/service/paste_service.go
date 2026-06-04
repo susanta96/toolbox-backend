@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/susanta96/toolbox-backend/internal/model"
@@ -84,7 +85,11 @@ func (s *PasteService) GetPaste(ctx context.Context, id string) (*model.Paste, e
 	if paste.ExpiresAt != nil && paste.ExpiresAt.Before(time.Now()) {
 		return nil, errors.New("paste has expired")
 	}
-	go func() { _ = s.repo.IncrementViewCount(context.Background(), id) }()
+	go func() {
+		if err := s.repo.IncrementViewCount(context.Background(), id); err != nil {
+			slog.Warn("failed to increment view count", "id", id, "error", err)
+		}
+	}()
 	return paste, nil
 }
 
@@ -126,12 +131,21 @@ func parseTTL(ttl string) (*time.Time, error) {
 }
 
 func generatePasteID() (string, error) {
-	b := make([]byte, 6)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
+	const alphabetLen = byte(len(idAlphabet)) // 62
+	id := make([]byte, 0, 6)
+	buf := make([]byte, 12)
+	for len(id) < 6 {
+		if _, err := rand.Read(buf); err != nil {
+			return "", err
+		}
+		for _, b := range buf {
+			if b < 248 { // 248 = 4*62; reject [248,255] to eliminate bias
+				id = append(id, idAlphabet[b%alphabetLen])
+				if len(id) == 6 {
+					break
+				}
+			}
+		}
 	}
-	for i := range b {
-		b[i] = idAlphabet[b[i]%byte(len(idAlphabet))]
-	}
-	return string(b), nil
+	return string(id), nil
 }

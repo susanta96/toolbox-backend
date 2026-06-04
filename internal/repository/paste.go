@@ -73,6 +73,9 @@ func (r *PasteRepository) GetExpiredIDs(ctx context.Context) ([]string, error) {
 		}
 		ids = append(ids, id)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate expired paste rows: %w", err)
+	}
 	return ids, nil
 }
 
