@@ -11,7 +11,7 @@ import (
 )
 
 // NewRouter sets up all HTTP routes and middleware.
-func NewRouter(pdfHandler *PDFHandler, currencyHandler *CurrencyHandler, maxBodyBytes int64, rateLimitRPM int, rateLimitWindow time.Duration) *chi.Mux {
+func NewRouter(pdfHandler *PDFHandler, currencyHandler *CurrencyHandler, pasteHandler *PasteHandler, maxBodyBytes int64, rateLimitRPM int, rateLimitWindow time.Duration) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -48,6 +48,12 @@ func NewRouter(pdfHandler *PDFHandler, currencyHandler *CurrencyHandler, maxBody
 			curr.Get("/supported", currencyHandler.Supported)
 			curr.Get("/convert", currencyHandler.Convert)
 			curr.Get("/historical", currencyHandler.Historical)
+		})
+
+		api.Route("/paste", func(paste chi.Router) {
+			// Strict per-route rate limit: 10 paste creations per IP per hour
+			paste.With(httprate.LimitByIP(10, time.Hour)).Post("/", pasteHandler.Create)
+			paste.Get("/{id}", pasteHandler.GetByID)
 		})
 	})
 
