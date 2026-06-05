@@ -18,8 +18,8 @@ func NewPasteRepository(pool *pgxpool.Pool) *PasteRepository {
 
 func (r *PasteRepository) Create(ctx context.Context, p *model.Paste) error {
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO pastes (id, content, language, expires_at) VALUES ($1, $2, $3, $4)`,
-		p.ID, p.Content, p.Language, p.ExpiresAt,
+		`INSERT INTO pastes (id, content, language, expires_at, file_name, mime_type) VALUES ($1, $2, $3, $4, $5, $6)`,
+		p.ID, p.Content, p.Language, p.ExpiresAt, p.FileName, p.MimeType,
 	)
 	if err != nil {
 		return fmt.Errorf("create paste: %w", err)
@@ -30,9 +30,9 @@ func (r *PasteRepository) Create(ctx context.Context, p *model.Paste) error {
 func (r *PasteRepository) GetByID(ctx context.Context, id string) (*model.Paste, error) {
 	p := &model.Paste{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, content, language, expires_at, created_at, view_count FROM pastes WHERE id = $1`,
+		`SELECT id, content, language, expires_at, created_at, view_count, file_name, mime_type FROM pastes WHERE id = $1`,
 		id,
-	).Scan(&p.ID, &p.Content, &p.Language, &p.ExpiresAt, &p.CreatedAt, &p.ViewCount)
+	).Scan(&p.ID, &p.Content, &p.Language, &p.ExpiresAt, &p.CreatedAt, &p.ViewCount, &p.FileName, &p.MimeType)
 	if err != nil {
 		return nil, fmt.Errorf("get paste: %w", err)
 	}

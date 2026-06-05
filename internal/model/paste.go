@@ -9,4 +9,6 @@ type Paste struct {
 	ExpiresAt *time.Time `json:"expires_at"`
 	CreatedAt time.Time  `json:"created_at"`
 	ViewCount int        `json:"view_count"`
+	FileName  *string    `json:"file_name"`
+	MimeType  *string    `json:"mime_type"`
 }

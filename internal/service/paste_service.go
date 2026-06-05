@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	maxPasteSizeBytes = 1 * 1024 * 1024 // 1 MB
+	maxPasteSizeBytes = 1 * 1024 * 1024  // 1 MB for text pastes
+	maxFileSizeBytes  = 7 * 1024 * 1024  // 7 MB for base64-encoded file pastes (~5 MB actual file)
 	idAlphabet        = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 )
 
@@ -25,9 +26,11 @@ var validLanguages = map[string]bool{
 }
 
 type CreatePasteRequest struct {
-	Content  string `json:"content"`
-	Language string `json:"language"`
-	TTL      string `json:"ttl"` // "1h" | "24h" | "7d" | "30d" | "never"
+	Content  string  `json:"content"`
+	Language string  `json:"language"`
+	TTL      string  `json:"ttl"` // "1h" | "24h" | "7d" | "30d" | "never"
+	FileName *string `json:"file_name"`
+	MimeType *string `json:"mime_type"`
 }
 
 type CreatePasteResult struct {
@@ -47,11 +50,19 @@ func (s *PasteService) CreatePaste(ctx context.Context, req CreatePasteRequest) 
 	if len(req.Content) == 0 {
 		return nil, errors.New("content cannot be empty")
 	}
-	if len(req.Content) > maxPasteSizeBytes {
-		return nil, errors.New("content exceeds 1 MB limit")
-	}
-	if !validLanguages[req.Language] {
-		req.Language = "auto"
+	isFilePaste := req.FileName != nil && *req.FileName != ""
+	if isFilePaste {
+		if len(req.Content) > maxFileSizeBytes {
+			return nil, errors.New("file exceeds 5 MB limit")
+		}
+		req.Language = "text"
+	} else {
+		if len(req.Content) > maxPasteSizeBytes {
+			return nil, errors.New("content exceeds 1 MB limit")
+		}
+		if !validLanguages[req.Language] {
+			req.Language = "auto"
+		}
 	}
 
 	expiresAt, err := parseTTL(req.TTL)
@@ -69,6 +80,8 @@ func (s *PasteService) CreatePaste(ctx context.Context, req CreatePasteRequest) 
 		Content:   req.Content,
 		Language:  req.Language,
 		ExpiresAt: expiresAt,
+		FileName:  req.FileName,
+		MimeType:  req.MimeType,
 	}
 	if err := s.repo.Create(ctx, paste); err != nil {
 		return nil, err
