@@ -19,7 +19,7 @@ func NewRouter(pdfHandler *PDFHandler, currencyHandler *CurrencyHandler, pasteHa
 	r.Use(middleware.Logger)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "HEAD", "POST", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Content-Type", "Authorization"},
 		ExposedHeaders:   []string{"Content-Disposition"},
 		AllowCredentials: false,
@@ -42,6 +42,9 @@ func NewRouter(pdfHandler *PDFHandler, currencyHandler *CurrencyHandler, pasteHa
 			pdf.Post("/merge", pdfHandler.MergePDF)
 			pdf.Post("/split", pdfHandler.SplitPDF)
 			pdf.Get("/download/{id}", pdfHandler.Download)
+			// Browsers / link-preview tools often probe with HEAD before GET.
+			// http.ServeFile handles HEAD natively (headers only, no body).
+			pdf.Head("/download/{id}", pdfHandler.Download)
 		})
 
 		api.Route("/currency", func(curr chi.Router) {

@@ -256,6 +256,18 @@ func (h *PDFHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The DB record is authoritative for metadata, but the file lives on a local
+	// volume that can be empty or out of sync (e.g. records created during a native
+	// run, or after the volume was recreated). Verify the file is actually on disk
+	// before serving so we return a clean JSON error instead of http.ServeFile's
+	// bare "404 page not found".
+	if _, err := os.Stat(rec.OutputPath); err != nil {
+		slog.Warn("download: record exists but file is missing on disk",
+			"id", id, "path", rec.OutputPath, "error", err)
+		response.Error(w, http.StatusGone, "file has expired and been removed")
+		return
+	}
+
 	downloadName := friendlyDownloadName(rec.OriginalName, rec.Operation)
 
 	// Detect content type from output file extension
