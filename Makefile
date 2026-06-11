@@ -1,4 +1,4 @@
-.PHONY: build run dev test clean docker-build docker-run lint tidy
+.PHONY: build run dev test clean docker-build docker-run compose-up compose-down lint tidy
 
 # Variables
 APP_NAME = toolbox-backend
@@ -46,7 +46,15 @@ docker-build:
 
 ## docker-run: Run with Docker
 docker-run:
-	docker run --rm -p 8080:8080 --env-file .env $(APP_NAME):latest
+	docker run --rm -p 8088:8088 --env-file .env $(APP_NAME):latest
+
+## compose-up: Build and start the full stack (app + postgres) in the background
+compose-up:
+	docker compose up -d --build
+
+## compose-down: Stop the stack (use 'docker compose down -v' to also drop volumes)
+compose-down:
+	docker compose down
 
 ## help: Show this help
 help:

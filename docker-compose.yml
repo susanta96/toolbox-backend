@@ -1,0 +1,31 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: toolbox-backend:latest
+    restart: unless-stopped
+    ports:
+      # host:container — change the host port (left side) if 8088 is taken on the VPS.
+      - "${APP_PORT:-8088}:8088"
+    environment:
+      PORT: "8088"
+      UPLOAD_DIR: /app/uploads
+      GENERATED_DIR: /app/generated
+    # DATABASE_URL (Neon) and any other overrides come from a .env file next to this compose file.
+    env_file:
+      - .env
+    volumes:
+      # Persist generated/uploaded files across restarts.
+      - app_uploads:/app/uploads
+      - app_generated:/app/generated
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8088/hello"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  app_uploads:
+  app_generated:
