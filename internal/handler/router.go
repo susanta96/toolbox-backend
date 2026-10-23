@@ -56,6 +56,7 @@ func NewRouter(pdfHandler *PDFHandler, currencyHandler *CurrencyHandler, pasteHa
 		api.Route("/paste", func(paste chi.Router) {
 			// Strict per-route rate limit: 10 paste creations per IP per hour
 			paste.With(httprate.LimitByIP(10, time.Hour)).Post("/", pasteHandler.Create)
+			paste.With(httprate.LimitByIP(5, time.Hour)).Post("/archive", pasteHandler.CreateArchive)
 			paste.Get("/{id}", pasteHandler.GetByID)
 		})
 	})

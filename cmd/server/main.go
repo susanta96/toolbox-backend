@@ -86,7 +86,7 @@ func main() {
 	// Handlers
 	pdfHandler := handler.NewPDFHandler(pdfService, fileRepo, cfg.UploadDir, cfg.FileRetention, cfg.MaxMergeFiles)
 	currencyHandler := handler.NewCurrencyHandler(currencyService)
-	pasteHandler := handler.NewPasteHandler(pasteService)
+	pasteHandler := handler.NewPasteHandler(pasteService, cfg.ArchiveMaxMB*1024*1024)
 	maxBodyBytes := cfg.MaxUploadSizeMB * 1024 * 1024
 	router := handler.NewRouter(pdfHandler, currencyHandler, pasteHandler, maxBodyBytes, cfg.RateLimitRPM, cfg.RateLimitWindow)
 
