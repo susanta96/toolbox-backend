@@ -57,6 +57,9 @@ var (
 // archiveTTL is the fixed lifetime of archive pastes; they never live forever.
 const archiveTTL = 24 * time.Hour
 
+// archiveCleanupTimeout bounds the compensating delete of an orphaned upload.
+const archiveCleanupTimeout = 10 * time.Second
+
 // archiveSniffBytes is how much of an upload is inspected to verify its type.
 const archiveSniffBytes = 512
 
@@ -79,7 +82,8 @@ func NewPasteService(repo pasteStore, store storage.ObjectStore, archiveFolder s
 // CreateArchivePaste verifies an archive upload, streams it to object storage
 // and records a paste that expires after archiveTTL. size is the declared
 // upload size in bytes; r is passed through to the store without being
-// buffered beyond the type-sniffing window.
+// buffered beyond the type-sniffing window. size is trusted: the caller (the
+// HTTP handler) must cap the reader so it cannot deliver more than size bytes.
 func (s *PasteService) CreateArchivePaste(ctx context.Context, fileName string, size int64, r io.Reader) (*CreatePasteResult, error) {
 	if s.store == nil {
 		return nil, ErrArchiveDisabled
@@ -128,8 +132,12 @@ func (s *PasteService) CreateArchivePaste(ctx context.Context, fileName string, 
 		FileSize:      &size,
 	}
 	if err := s.repo.Create(ctx, paste); err != nil {
-		// Best effort: do not leave an orphaned object behind.
-		if delErr := s.store.Delete(ctx, obj.FileID); delErr != nil {
+		// Best effort: do not leave an orphaned object behind. The request
+		// context may be the very reason the insert failed (client gone,
+		// deadline hit), so clean up on a detached, bounded context.
+		dctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), archiveCleanupTimeout)
+		defer cancel()
+		if delErr := s.store.Delete(dctx, obj.FileID); delErr != nil {
 			slog.Warn("failed to delete uploaded archive after insert failure",
 				"id", id, "file_id", obj.FileID, "error", delErr)
 		}
