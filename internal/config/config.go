@@ -25,6 +25,10 @@ type Config struct {
 	FXHistoryKeep   time.Duration
 	RateLimitRPM    int
 	RateLimitWindow time.Duration
+
+	ImageKitPrivateKey string
+	ImageKitFolder     string
+	ArchiveMaxMB       int64
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -47,6 +51,10 @@ func Load() *Config {
 		FXHistoryKeep:   getEnvDuration("FX_HISTORY_KEEP", 8760*time.Hour),
 		RateLimitRPM:    int(getEnvInt("RATE_LIMIT_RPM", 60)),
 		RateLimitWindow: getEnvDuration("RATE_LIMIT_WINDOW", 1*time.Minute),
+
+		ImageKitPrivateKey: getEnv("IMAGEKIT_PRIVATE_KEY", ""),
+		ImageKitFolder:     getEnv("IMAGEKIT_FOLDER", "/toolbox-pastes"),
+		ArchiveMaxMB:       getEnvInt("ARCHIVE_MAX_MB", 20),
 	}
 }
 

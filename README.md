@@ -96,6 +96,11 @@ make run
 | `FX_WARMUP_LIMIT`  | `30`          | Max most-requested pairs to warm each run |
 | `FX_HTTP_TIMEOUT`  | `8s`          | HTTP timeout for provider calls    |
 | `FX_HISTORY_KEEP`  | `8760h`       | Historical retention window (12 months) |
+| `IMAGEKIT_PRIVATE_KEY` | (empty)     | ImageKit private key for archive uploads (feature disabled when unset) |
+| `IMAGEKIT_FOLDER`  | `/toolbox-pastes` | ImageKit folder for paste archives |
+| `ARCHIVE_MAX_MB`   | `20`          | Max paste archive upload size in MB |
+
+Paste archive uploads store zip archives in ImageKit through the `storage.ObjectStore` abstraction. Set `IMAGEKIT_PRIVATE_KEY` (never commit it) to enable them; `IMAGEKIT_FOLDER` and `ARCHIVE_MAX_MB` tune the target folder and size limit.
 
 ## API Endpoints
 
