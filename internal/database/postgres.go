@@ -121,6 +121,16 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 		return fmt.Errorf("run migration (paste file columns): %w", err)
 	}
 
+	pasteStorageQuery := `
+	ALTER TABLE pastes ADD COLUMN IF NOT EXISTS storage_file_id TEXT;
+	ALTER TABLE pastes ADD COLUMN IF NOT EXISTS storage_url TEXT;
+	ALTER TABLE pastes ADD COLUMN IF NOT EXISTS file_size BIGINT;
+	`
+
+	if _, err := pool.Exec(ctx, pasteStorageQuery); err != nil {
+		return fmt.Errorf("run migration (paste storage columns): %w", err)
+	}
+
 	slog.Info("database migrations completed")
 	return nil
 }
