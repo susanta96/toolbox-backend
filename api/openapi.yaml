@@ -1,0 +1,614 @@
+openapi: 3.0.3
+info:
+  title: Toolbox API
+  description: |
+    A collection of utility APIs — PDF manipulation, currency conversion, and pastebin.
+  version: 1.0.0
+  contact:
+    name: susanta96
+
+servers:
+  - url: /api/v1
+    description: Current server
+
+tags:
+  - name: PDF
+    description: PDF operations (lock, unlock, compress, merge, split, download)
+  - name: Currency
+    description: Currency conversion and historical rates
+  - name: Paste
+    description: Code / text pastebin
+
+paths:
+  /pdf/lock:
+    post:
+      tags: [PDF]
+      summary: Lock a PDF with a password
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, password]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF file to lock
+                password:
+                  type: string
+                  description: User password for opening the PDF
+                owner_password:
+                  type: string
+                  description: Owner password (optional; controls permissions)
+      responses:
+        "200":
+          description: PDF locked successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PDFOperationResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /pdf/unlock:
+    post:
+      tags: [PDF]
+      summary: Remove password protection from a PDF
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, password]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Encrypted PDF file
+                password:
+                  type: string
+                  description: Current user password
+      responses:
+        "200":
+          description: PDF unlocked successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PDFOperationResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /pdf/compress:
+    post:
+      tags: [PDF]
+      summary: Compress a PDF file
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF file to compress
+                level:
+                  type: string
+                  enum: [low, medium, high, maximum]
+                  default: medium
+                  description: Compression quality level
+      responses:
+        "200":
+          description: PDF compressed successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PDFOperationResult"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          original_size:
+                            type: integer
+                            example: 2048000
+                          compressed_size:
+                            type: integer
+                            example: 1024000
+                          saved_bytes:
+                            type: integer
+                            example: 1024000
+                          compression_percent:
+                            type: string
+                            example: "50.0"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /pdf/merge:
+    post:
+      tags: [PDF]
+      summary: Merge multiple PDF files into one
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: "PDF files to merge (2–10 files, send as repeated 'files' field)"
+                  minItems: 2
+      responses:
+        "200":
+          description: PDFs merged successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PDFOperationResult"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          file_count:
+                            type: integer
+                            example: 3
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /pdf/split:
+    post:
+      tags: [PDF]
+      summary: Split a PDF into individual pages or page ranges
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF file to split
+                mode:
+                  type: string
+                  enum: [all, ranges]
+                  default: all
+                  description: "`all` extracts every page; `ranges` extracts specified page ranges"
+                pages:
+                  type: string
+                  example: "1-3,5,7-9"
+                  description: "Required when mode=ranges. Comma-separated page ranges, e.g. \"1-3,5,7-9\""
+      responses:
+        "200":
+          description: PDF split successfully — download link returns a ZIP archive
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PDFOperationResult"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          page_count:
+                            type: integer
+                            example: 10
+                          split_count:
+                            type: integer
+                            example: 10
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /pdf/download/{id}:
+    get:
+      tags: [PDF]
+      summary: Download a processed PDF (or ZIP for split)
+      parameters:
+        - $ref: "#/components/parameters/FileID"
+      responses:
+        "200":
+          description: File download stream
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: 'attachment; filename="document (Locked).pdf"'
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/Gone"
+    head:
+      tags: [PDF]
+      summary: Check if a processed file is available (headers only)
+      parameters:
+        - $ref: "#/components/parameters/FileID"
+      responses:
+        "200":
+          description: File is available
+        "404":
+          description: File not found
+        "410":
+          description: File has expired
+
+  /currency/supported:
+    get:
+      tags: [Currency]
+      summary: List all supported currency codes
+      responses:
+        "200":
+          description: Supported currencies
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Supported currencies fetched"
+                  data:
+                    type: object
+                    properties:
+                      currencies:
+                        type: object
+                        additionalProperties:
+                          type: string
+                        example:
+                          USD: "United States Dollar"
+                          EUR: "Euro"
+                          INR: "Indian Rupee"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /currency/convert:
+    get:
+      tags: [Currency]
+      summary: Convert an amount from one currency to another
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            example: USD
+          description: Source currency code (ISO 4217)
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            example: INR
+          description: Target currency code (ISO 4217)
+        - name: amount
+          in: query
+          required: true
+          schema:
+            type: number
+            example: 100
+          description: Amount to convert (non-negative)
+      responses:
+        "200":
+          description: Conversion result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Conversion successful"
+                  data:
+                    type: object
+                    properties:
+                      from:
+                        type: string
+                        example: USD
+                      to:
+                        type: string
+                        example: INR
+                      amount:
+                        type: number
+                        example: 100
+                      converted:
+                        type: number
+                        example: 8350.5
+                      rate:
+                        type: number
+                        example: 83.505
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /currency/historical:
+    get:
+      tags: [Currency]
+      summary: Historical exchange rates between two currencies
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            example: USD
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            example: INR
+        - name: range
+          in: query
+          schema:
+            type: string
+            example: 30d
+            default: 30d
+          description: "Look-back window, e.g. 7d, 30d, 90d, 365d (max 365d)"
+        - name: aggregation
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, monthly]
+            default: daily
+      responses:
+        "200":
+          description: Historical rates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Historical rates fetched"
+                  data:
+                    type: object
+                    properties:
+                      from:
+                        type: string
+                        example: USD
+                      to:
+                        type: string
+                        example: INR
+                      rates:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            date:
+                              type: string
+                              format: date
+                              example: "2024-01-15"
+                            rate:
+                              type: number
+                              example: 83.12
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /paste:
+    post:
+      tags: [Paste]
+      summary: Create a new paste
+      description: Rate-limited to 10 pastes per IP per hour.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePasteRequest"
+      responses:
+        "201":
+          description: Paste created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Paste created successfully"
+                  data:
+                    $ref: "#/components/schemas/Paste"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /paste/{id}:
+    get:
+      tags: [Paste]
+      summary: Get a paste by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "abc123"
+      responses:
+        "200":
+          description: Paste found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "OK"
+                  data:
+                    $ref: "#/components/schemas/Paste"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/Gone"
+
+components:
+  parameters:
+    FileID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        example: "550e8400-e29b-41d4-a716-446655440000"
+      description: File record ID returned by a PDF operation
+
+  schemas:
+    PDFOperationResult:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "PDF locked successfully"
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+              example: "550e8400-e29b-41d4-a716-446655440000"
+            download:
+              type: string
+              example: "/api/v1/pdf/download/550e8400-e29b-41d4-a716-446655440000"
+            file_name:
+              type: string
+              example: "document (Locked).pdf"
+
+    CreatePasteRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          description: Text or code to paste
+          example: "console.log('hello world')"
+        language:
+          type: string
+          description: Programming language for syntax highlighting
+          example: javascript
+        expires_in:
+          type: string
+          description: "Expiry duration, e.g. 1h, 24h, 7d. Omit for no expiry."
+          example: "24h"
+        file_name:
+          type: string
+          description: Optional file name hint
+          example: "index.js"
+        mime_type:
+          type: string
+          description: Optional MIME type
+          example: "text/javascript"
+
+    Paste:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "abc123"
+        content:
+          type: string
+          example: "console.log('hello world')"
+        language:
+          type: string
+          example: javascript
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        view_count:
+          type: integer
+          example: 5
+        file_name:
+          type: string
+          nullable: true
+        mime_type:
+          type: string
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "invalid request"
+
+  responses:
+    BadRequest:
+      description: Bad request — invalid or missing parameters
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Gone:
+      description: Resource has expired and been removed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    UnprocessableEntity:
+      description: File could not be processed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ServiceUnavailable:
+      description: Upstream service unavailable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"

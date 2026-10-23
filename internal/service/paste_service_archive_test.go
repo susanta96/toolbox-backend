@@ -16,11 +16,15 @@ import (
 type fakeRepo struct {
 	created   []*model.Paste
 	createErr error
+	onCreate  func() // optional hook run at the start of Create
 	getResult *model.Paste
 	getErr    error
 }
 
 func (f *fakeRepo) Create(_ context.Context, p *model.Paste) error {
+	if f.onCreate != nil {
+		f.onCreate()
+	}
 	if f.createErr != nil {
 		return f.createErr
 	}
@@ -47,6 +51,8 @@ type fakeStore struct {
 	putErr      error
 	deleteCalls []string
 	deleteErr   error
+	// deleteCtxErrs records ctx.Err() as seen by each Delete call.
+	deleteCtxErrs []error
 }
 
 func (f *fakeStore) Put(_ context.Context, folder, name string, r io.Reader) (storage.StoredObject, error) {
@@ -61,8 +67,13 @@ func (f *fakeStore) Put(_ context.Context, folder, name string, r io.Reader) (st
 	return storage.StoredObject{FileID: "file-123", URL: "https://cdn.example/" + name}, nil
 }
 
-func (f *fakeStore) Delete(_ context.Context, fileID string) error {
+// Delete honours ctx like a real network client: it fails if ctx is done.
+func (f *fakeStore) Delete(ctx context.Context, fileID string) error {
 	f.deleteCalls = append(f.deleteCalls, fileID)
+	f.deleteCtxErrs = append(f.deleteCtxErrs, ctx.Err())
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return f.deleteErr
 }
 
@@ -235,6 +246,27 @@ func TestCreateArchivePaste_DBFailureDeletesUploadedFile(t *testing.T) {
 	}
 	if len(store.deleteCalls) != 1 || store.deleteCalls[0] != "file-123" {
 		t.Errorf("Delete calls = %v, want exactly [file-123]", store.deleteCalls)
+	}
+}
+
+func TestCreateArchivePaste_DBFailureWithCancelledCtxStillDeletesFile(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// The client disconnects while the insert is in flight.
+	repo := &fakeRepo{createErr: context.Canceled, onCreate: cancel}
+	store := &fakeStore{}
+	svc := newArchiveService(repo, store)
+	data := zipBytes(100)
+
+	_, err := svc.CreateArchivePaste(ctx, "a.zip", int64(len(data)), bytes.NewReader(data))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want the original insert error", err)
+	}
+	if len(store.deleteCalls) != 1 || store.deleteCalls[0] != "file-123" {
+		t.Fatalf("Delete calls = %v, want exactly [file-123]", store.deleteCalls)
+	}
+	if store.deleteCtxErrs[0] != nil {
+		t.Errorf("Delete received a done context (%v); cleanup must use a detached context", store.deleteCtxErrs[0])
 	}
 }
 

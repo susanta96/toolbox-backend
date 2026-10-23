@@ -33,6 +33,10 @@ func NewRouter(pdfHandler *PDFHandler, currencyHandler *CurrencyHandler, pasteHa
 	// Routes
 	r.Get("/hello", Hello)
 
+	// API docs
+	r.Get("/docs", ServeScalarDocs)
+	r.Get("/openapi.yaml", ServeOpenAPISpec)
+
 	// API v1
 	r.Route("/api/v1", func(api chi.Router) {
 		api.Route("/pdf", func(pdf chi.Router) {
