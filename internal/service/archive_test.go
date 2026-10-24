@@ -135,3 +135,33 @@ func TestSanitizeFileName(t *testing.T) {
 		}
 	})
 }
+
+func TestSanitizeFileName_ByteCapAndTruncationEdges(t *testing.T) {
+	t.Run("cjk name stays within 200 bytes", func(t *testing.T) {
+		got := SanitizeFileName(strings.Repeat("文", 120) + ".zip")
+		if len(got) > 200 {
+			t.Errorf("len = %d bytes, want <= 200", len(got))
+		}
+		if !utf8.ValidString(got) {
+			t.Errorf("invalid UTF-8: %q", got)
+		}
+		if !strings.HasSuffix(got, ".zip") {
+			t.Errorf("extension lost: %q", got)
+		}
+	})
+	t.Run("byte cut lands on a rune boundary", func(t *testing.T) {
+		got := SanitizeFileName(strings.Repeat("a", 60) + strings.Repeat("文", 55) + ".zip")
+		if len(got) > 200 || !utf8.ValidString(got) || !strings.HasSuffix(got, ".zip") {
+			t.Errorf("bad result (len %d): %q", len(got), got)
+		}
+	})
+	t.Run("cut right after a dot does not yield double dots", func(t *testing.T) {
+		got := SanitizeFileName(strings.Repeat("a", 115) + "." + strings.Repeat("b", 50) + ".zip")
+		if strings.Contains(got, "..") {
+			t.Errorf("double dot in %q", got)
+		}
+		if !strings.HasSuffix(got, ".zip") || utf8.RuneCountInString(got) > 120 {
+			t.Errorf("bad result %q", got)
+		}
+	})
+}

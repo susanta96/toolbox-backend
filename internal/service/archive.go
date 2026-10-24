@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // ArchiveKind describes a supported archive format.
@@ -19,6 +20,7 @@ var ErrArchiveInvalid = errors.New("unsupported or corrupt archive")
 
 const (
 	maxFileNameLen   = 120
+	maxFileNameBytes = 200
 	maxExtensionLen  = 16
 	fallbackFileName = "archive"
 	tarMagicOffset   = 257
@@ -109,7 +111,8 @@ func lastPathSegment(name string) string {
 	return name
 }
 
-// SanitizeFileName returns a safe display/storage name: at most 120 characters,
+// SanitizeFileName returns a safe display/storage name: at most 120 characters
+// and 200 bytes,
 // no path separators or control characters, extension preserved, and never
 // empty (falls back to "archive").
 func SanitizeFileName(name string) string {
@@ -128,20 +131,45 @@ func SanitizeFileName(name string) string {
 		name = strings.ReplaceAll(name, "..", "_")
 	}
 
-	runes := []rune(name)
-	if len(runes) > maxFileNameLen {
-		ext := []rune{}
-		if i := strings.LastIndex(name, "."); i >= 0 {
-			if e := []rune(name[i:]); len(e) <= maxExtensionLen {
-				ext = e
-			}
-		}
-		runes = append(runes[:maxFileNameLen-len(ext)], ext...)
+	if utf8.RuneCountInString(name) > maxFileNameLen || len(name) > maxFileNameBytes {
+		name = truncateFileName(name)
 	}
 
-	out := strings.TrimSpace(string(runes))
+	out := strings.TrimSpace(name)
 	if out == "" {
 		return fallbackFileName
 	}
 	return out
+}
+
+// truncateFileName shortens name to at most maxFileNameLen runes and
+// maxFileNameBytes bytes, cutting only on rune boundaries and keeping a short
+// extension. Dots and spaces left dangling at the cut are dropped so that the
+// stem joined with the extension never contains "..".
+func truncateFileName(name string) string {
+	ext := ""
+	if i := strings.LastIndex(name, "."); i >= 0 {
+		if e := name[i:]; utf8.RuneCountInString(e) <= maxExtensionLen && len(e) <= maxExtensionLen*utf8.UTFMax {
+			ext = e
+		}
+	}
+	stem := strings.TrimSuffix(name, ext)
+
+	runeBudget := maxFileNameLen - utf8.RuneCountInString(ext)
+	byteBudget := maxFileNameBytes - len(ext)
+
+	cut, runes := 0, 0
+	for i, r := range stem {
+		size := utf8.RuneLen(r)
+		if runes+1 > runeBudget || i+size > byteBudget {
+			break
+		}
+		runes++
+		cut = i + size
+	}
+	stem = strings.TrimRight(stem[:cut], ". ")
+	if stem == "" {
+		stem = fallbackFileName
+	}
+	return stem + ext
 }
