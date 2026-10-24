@@ -11,7 +11,7 @@ import (
 )
 
 // NewRouter sets up all HTTP routes and middleware.
-func NewRouter(pdfHandler *PDFHandler, currencyHandler *CurrencyHandler, pasteHandler *PasteHandler, maxBodyBytes int64, rateLimitRPM int, rateLimitWindow time.Duration) *chi.Mux {
+func NewRouter(pdfHandler *PDFHandler, currencyHandler *CurrencyHandler, pasteHandler *PasteHandler, maxBodyBytes int64, rateLimitRPM int, rateLimitWindow time.Duration, trustProxyIPHeader bool) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -60,7 +60,9 @@ func NewRouter(pdfHandler *PDFHandler, currencyHandler *CurrencyHandler, pasteHa
 		api.Route("/paste", func(paste chi.Router) {
 			// Strict per-route rate limit: 10 paste creations per IP per hour
 			paste.With(httprate.LimitByIP(10, time.Hour)).Post("/", pasteHandler.Create)
-			paste.With(httprate.LimitByIP(5, time.Hour)).Post("/archive", pasteHandler.CreateArchive)
+			// Archive uploads are limited per client IP; behind a reverse proxy the
+			// IP comes from X-Real-IP (only when trustProxyIPHeader is set).
+			paste.With(httprate.Limit(5, time.Hour, httprate.WithKeyFuncs(clientIPKey(trustProxyIPHeader)))).Post("/archive", pasteHandler.CreateArchive)
 			paste.Get("/{id}", pasteHandler.GetByID)
 		})
 	})

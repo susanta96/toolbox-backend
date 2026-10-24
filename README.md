@@ -98,7 +98,8 @@ make run
 | `FX_HISTORY_KEEP`  | `8760h`       | Historical retention window (12 months) |
 | `IMAGEKIT_PRIVATE_KEY` | (empty)     | ImageKit private key for archive uploads (feature disabled when unset) |
 | `IMAGEKIT_FOLDER`  | `/toolbox-pastes` | ImageKit folder for paste archives |
-| `ARCHIVE_MAX_MB`   | `20`          | Max paste archive upload size in MB |
+| `ARCHIVE_MAX_MB`   | `20`          | Max paste archive upload size in MB (values below 1 use 20; capped at 49 by the 50 MB request body limit) |
+| `TRUST_PROXY_IP_HEADER` | `false`  | Use `X-Real-IP` as the client IP for the archive upload rate limit; set to `true` only when the API is reachable solely through your reverse proxy |
 
 Paste archive uploads store zip archives in ImageKit through the `storage.ObjectStore` abstraction. Set `IMAGEKIT_PRIVATE_KEY` (never commit it) to enable them; `IMAGEKIT_FOLDER` and `ARCHIVE_MAX_MB` tune the target folder and size limit.
 
