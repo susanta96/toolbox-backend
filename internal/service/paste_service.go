@@ -60,6 +60,11 @@ const archiveTTL = 24 * time.Hour
 // archiveCleanupTimeout bounds the compensating delete of an orphaned upload.
 const archiveCleanupTimeout = 10 * time.Second
 
+// archiveUploadTimeout bounds the store upload and row insert, which run on a
+// context detached from the request so a client disconnect cannot orphan a
+// file that was already sent to storage.
+const archiveUploadTimeout = 90 * time.Second
+
 // archiveSniffBytes is how much of an upload is inspected to verify its type.
 const archiveSniffBytes = 512
 
@@ -112,6 +117,11 @@ func (s *PasteService) CreateArchivePaste(ctx context.Context, fileName string, 
 		return nil, err
 	}
 
+	// From here on the work must not die with the request: once storage has
+	// the bytes, we need the row (or a compensating delete) to follow.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), archiveUploadTimeout)
+	defer cancel()
+
 	safeName := SanitizeFileName(fileName)
 	obj, err := s.store.Put(ctx, s.archiveFolder, id+"_"+safeName, br)
 	if err != nil {
@@ -132,11 +142,11 @@ func (s *PasteService) CreateArchivePaste(ctx context.Context, fileName string, 
 		FileSize:      &size,
 	}
 	if err := s.repo.Create(ctx, paste); err != nil {
-		// Best effort: do not leave an orphaned object behind. The request
-		// context may be the very reason the insert failed (client gone,
-		// deadline hit), so clean up on a detached, bounded context.
-		dctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), archiveCleanupTimeout)
-		defer cancel()
+		// Best effort: do not leave an orphaned object behind. The upload
+		// context may be the very reason the insert failed (deadline hit), so
+		// clean up on a fresh, detached, bounded context.
+		dctx, dcancel := context.WithTimeout(context.WithoutCancel(ctx), archiveCleanupTimeout)
+		defer dcancel()
 		if delErr := s.store.Delete(dctx, obj.FileID); delErr != nil {
 			slog.Warn("failed to delete uploaded archive after insert failure",
 				"id", id, "file_id", obj.FileID, "error", delErr)
