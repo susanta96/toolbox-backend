@@ -1,15 +1,17 @@
 package service
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"time"
 
 	"github.com/susanta96/toolbox-backend/internal/model"
-	"github.com/susanta96/toolbox-backend/internal/repository"
+	"github.com/susanta96/toolbox-backend/internal/storage"
 )
 
 const (
@@ -38,12 +40,121 @@ type CreatePasteResult struct {
 	ExpiresAt *time.Time `json:"expires_at"`
 }
 
-type PasteService struct {
-	repo *repository.PasteRepository
+// pasteStore is the persistence contract of PasteService; it is satisfied by
+// *repository.PasteRepository.
+type pasteStore interface {
+	Create(ctx context.Context, p *model.Paste) error
+	GetByID(ctx context.Context, id string) (*model.Paste, error)
+	IncrementViewCount(ctx context.Context, id string) error
+	IDExists(ctx context.Context, id string) (bool, error)
 }
 
-func NewPasteService(repo *repository.PasteRepository) *PasteService {
-	return &PasteService{repo: repo}
+var (
+	ErrArchiveTooLarge = errors.New("archive exceeds size limit")
+	ErrArchiveDisabled = errors.New("archive uploads are not configured")
+)
+
+// archiveTTL is the fixed lifetime of archive pastes; they never live forever.
+const archiveTTL = 24 * time.Hour
+
+// archiveCleanupTimeout bounds the compensating delete of an orphaned upload.
+const archiveCleanupTimeout = 10 * time.Second
+
+// archiveUploadTimeout bounds the store upload and row insert, which run on a
+// context detached from the request so a client disconnect cannot orphan a
+// file that was already sent to storage.
+const archiveUploadTimeout = 90 * time.Second
+
+// archiveSniffBytes is how much of an upload is inspected to verify its type.
+const archiveSniffBytes = 512
+
+type PasteService struct {
+	repo            pasteStore
+	store           storage.ObjectStore // nil when archive uploads are disabled
+	archiveFolder   string
+	archiveMaxBytes int64
+}
+
+func NewPasteService(repo pasteStore, store storage.ObjectStore, archiveFolder string, archiveMaxBytes int64) *PasteService {
+	return &PasteService{
+		repo:            repo,
+		store:           store,
+		archiveFolder:   archiveFolder,
+		archiveMaxBytes: archiveMaxBytes,
+	}
+}
+
+// CreateArchivePaste verifies an archive upload, streams it to object storage
+// and records a paste that expires after archiveTTL. size is the declared
+// upload size in bytes; r is passed through to the store without being
+// buffered beyond the type-sniffing window. size is trusted: the caller (the
+// HTTP handler) must cap the reader so it cannot deliver more than size bytes.
+func (s *PasteService) CreateArchivePaste(ctx context.Context, fileName string, size int64, r io.Reader) (*CreatePasteResult, error) {
+	if s.store == nil {
+		return nil, ErrArchiveDisabled
+	}
+	if size <= 0 {
+		return nil, ErrArchiveInvalid
+	}
+	if size > s.archiveMaxBytes {
+		return nil, ErrArchiveTooLarge
+	}
+
+	// Peek the head without consuming it, then hand the same bufio.Reader to
+	// the store so the sniffed bytes are still uploaded.
+	br := bufio.NewReaderSize(r, archiveSniffBytes)
+	head, err := br.Peek(archiveSniffBytes)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("read archive head: %w", err)
+	}
+	kind, err := DetectArchive(fileName, head)
+	if err != nil {
+		return nil, err
+	}
+
+	id, err := s.generateUniqueID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// From here on the work must not die with the request: once storage has
+	// the bytes, we need the row (or a compensating delete) to follow.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), archiveUploadTimeout)
+	defer cancel()
+
+	safeName := SanitizeFileName(fileName)
+	obj, err := s.store.Put(ctx, s.archiveFolder, id+"_"+safeName, br)
+	if err != nil {
+		return nil, fmt.Errorf("upload archive: %w", err)
+	}
+
+	expiresAt := time.Now().Add(archiveTTL)
+	mime := kind.Mime
+	paste := &model.Paste{
+		ID:            id,
+		Content:       "",
+		Language:      "text",
+		ExpiresAt:     &expiresAt,
+		FileName:      &safeName,
+		MimeType:      &mime,
+		StorageFileID: &obj.FileID,
+		StorageURL:    &obj.URL,
+		FileSize:      &size,
+	}
+	if err := s.repo.Create(ctx, paste); err != nil {
+		// Best effort: do not leave an orphaned object behind. The upload
+		// context may be the very reason the insert failed (deadline hit), so
+		// clean up on a fresh, detached, bounded context.
+		dctx, dcancel := context.WithTimeout(context.WithoutCancel(ctx), archiveCleanupTimeout)
+		defer dcancel()
+		if delErr := s.store.Delete(dctx, obj.FileID); delErr != nil {
+			slog.Warn("failed to delete uploaded archive after insert failure",
+				"id", id, "file_id", obj.FileID, "error", delErr)
+		}
+		return nil, err
+	}
+
+	return &CreatePasteResult{ID: id, ExpiresAt: &expiresAt}, nil
 }
 
 func (s *PasteService) CreatePaste(ctx context.Context, req CreatePasteRequest) (*CreatePasteResult, error) {

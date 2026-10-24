@@ -16,6 +16,7 @@ import (
 	"github.com/susanta96/toolbox-backend/internal/repository"
 	"github.com/susanta96/toolbox-backend/internal/scheduler"
 	"github.com/susanta96/toolbox-backend/internal/service"
+	"github.com/susanta96/toolbox-backend/internal/storage"
 )
 
 func main() {
@@ -70,14 +71,24 @@ func main() {
 		cfg.FXStaleWindow,
 		cfg.FXHistoryKeep,
 	)
-	pasteService := service.NewPasteService(pasteRepo)
+
+	// Archive storage (ImageKit). Left nil when no key is configured, which
+	// disables archive uploads. Declared as the interface type so a nil value
+	// stays a true nil interface.
+	var archiveStore storage.ObjectStore
+	if cfg.ImageKitPrivateKey != "" {
+		archiveStore = storage.NewImageKit(cfg.ImageKitPrivateKey)
+	} else {
+		slog.Warn("IMAGEKIT_PRIVATE_KEY not set; archive uploads are disabled")
+	}
+	pasteService := service.NewPasteService(pasteRepo, archiveStore, cfg.ImageKitFolder, cfg.ArchiveMaxMB*1024*1024)
 
 	// Handlers
 	pdfHandler := handler.NewPDFHandler(pdfService, fileRepo, cfg.UploadDir, cfg.FileRetention, cfg.MaxMergeFiles)
 	currencyHandler := handler.NewCurrencyHandler(currencyService)
-	pasteHandler := handler.NewPasteHandler(pasteService)
+	pasteHandler := handler.NewPasteHandler(pasteService, cfg.ArchiveMaxMB*1024*1024)
 	maxBodyBytes := cfg.MaxUploadSizeMB * 1024 * 1024
-	router := handler.NewRouter(pdfHandler, currencyHandler, pasteHandler, maxBodyBytes, cfg.RateLimitRPM, cfg.RateLimitWindow)
+	router := handler.NewRouter(pdfHandler, currencyHandler, pasteHandler, maxBodyBytes, cfg.RateLimitRPM, cfg.RateLimitWindow, cfg.TrustProxyIPHeader)
 
 	// Cleanup scheduler — removes expired files from disk + expired DB records
 	cleanup := scheduler.NewCleanup(fileRepo, []string{cfg.UploadDir, cfg.GeneratedDir}, cfg.FileRetention)
@@ -92,7 +103,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	pasteCleanup := scheduler.NewPasteCleanup(pasteRepo)
+	pasteCleanup := scheduler.NewPasteCleanup(pasteRepo, archiveStore)
 	if err := pasteCleanup.Start(cfg.CleanupInterval); err != nil {
 		slog.Error("failed to start paste cleanup scheduler", "error", err)
 		os.Exit(1)

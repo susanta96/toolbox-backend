@@ -18,8 +18,8 @@ func NewPasteRepository(pool *pgxpool.Pool) *PasteRepository {
 
 func (r *PasteRepository) Create(ctx context.Context, p *model.Paste) error {
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO pastes (id, content, language, expires_at, file_name, mime_type) VALUES ($1, $2, $3, $4, $5, $6)`,
-		p.ID, p.Content, p.Language, p.ExpiresAt, p.FileName, p.MimeType,
+		`INSERT INTO pastes (id, content, language, expires_at, file_name, mime_type, storage_file_id, storage_url, file_size) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		p.ID, p.Content, p.Language, p.ExpiresAt, p.FileName, p.MimeType, p.StorageFileID, p.StorageURL, p.FileSize,
 	)
 	if err != nil {
 		return fmt.Errorf("create paste: %w", err)
@@ -30,9 +30,9 @@ func (r *PasteRepository) Create(ctx context.Context, p *model.Paste) error {
 func (r *PasteRepository) GetByID(ctx context.Context, id string) (*model.Paste, error) {
 	p := &model.Paste{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, content, language, expires_at, created_at, view_count, file_name, mime_type FROM pastes WHERE id = $1`,
+		`SELECT id, content, language, expires_at, created_at, view_count, file_name, mime_type, storage_file_id, storage_url, file_size FROM pastes WHERE id = $1`,
 		id,
-	).Scan(&p.ID, &p.Content, &p.Language, &p.ExpiresAt, &p.CreatedAt, &p.ViewCount, &p.FileName, &p.MimeType)
+	).Scan(&p.ID, &p.Content, &p.Language, &p.ExpiresAt, &p.CreatedAt, &p.ViewCount, &p.FileName, &p.MimeType, &p.StorageFileID, &p.StorageURL, &p.FileSize)
 	if err != nil {
 		return nil, fmt.Errorf("get paste: %w", err)
 	}
@@ -56,27 +56,29 @@ func (r *PasteRepository) IDExists(ctx context.Context, id string) (bool, error)
 	return exists, nil
 }
 
-func (r *PasteRepository) GetExpiredIDs(ctx context.Context) ([]string, error) {
+// GetExpired returns expired pastes along with their stored object ids so the
+// caller can remove the backing objects before deleting the rows.
+func (r *PasteRepository) GetExpired(ctx context.Context) ([]model.ExpiredPaste, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id FROM pastes WHERE expires_at IS NOT NULL AND expires_at < NOW()`,
+		`SELECT id, storage_file_id FROM pastes WHERE expires_at IS NOT NULL AND expires_at < NOW()`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query expired pastes: %w", err)
 	}
 	defer rows.Close()
 
-	var ids []string
+	var expired []model.ExpiredPaste
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("scan expired paste id: %w", err)
+		var e model.ExpiredPaste
+		if err := rows.Scan(&e.ID, &e.StorageFileID); err != nil {
+			return nil, fmt.Errorf("scan expired paste: %w", err)
 		}
-		ids = append(ids, id)
+		expired = append(expired, e)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate expired paste rows: %w", err)
 	}
-	return ids, nil
+	return expired, nil
 }
 
 func (r *PasteRepository) DeleteByID(ctx context.Context, id string) error {

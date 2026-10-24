@@ -25,6 +25,15 @@ type Config struct {
 	FXHistoryKeep   time.Duration
 	RateLimitRPM    int
 	RateLimitWindow time.Duration
+
+	ImageKitPrivateKey string
+	ImageKitFolder     string
+	ArchiveMaxMB       int64
+
+	// TrustProxyIPHeader makes the archive upload rate limiter read the client
+	// IP from X-Real-IP. Enable only when the API is reachable solely through
+	// a reverse proxy that sets that header.
+	TrustProxyIPHeader bool
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -47,6 +56,12 @@ func Load() *Config {
 		FXHistoryKeep:   getEnvDuration("FX_HISTORY_KEEP", 8760*time.Hour),
 		RateLimitRPM:    int(getEnvInt("RATE_LIMIT_RPM", 60)),
 		RateLimitWindow: getEnvDuration("RATE_LIMIT_WINDOW", 1*time.Minute),
+
+		ImageKitPrivateKey: getEnv("IMAGEKIT_PRIVATE_KEY", ""),
+		ImageKitFolder:     getEnv("IMAGEKIT_FOLDER", "/toolbox-pastes"),
+		ArchiveMaxMB:       getEnvArchiveMaxMB(),
+
+		TrustProxyIPHeader: getEnvBool("TRUST_PROXY_IP_HEADER", false),
 	}
 }
 
@@ -64,6 +79,35 @@ func getEnvInt(key string, fallback int64) int64 {
 		}
 	}
 	return fallback
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	if v := os.Getenv(key); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
+		}
+	}
+	return fallback
+}
+
+const (
+	defaultArchiveMaxMB = 20
+	// maxArchiveMaxMB stays below the global 50 MB request body limit so that
+	// an archive plus its multipart framing still fits in a request.
+	maxArchiveMaxMB = 49
+)
+
+// getEnvArchiveMaxMB reads ARCHIVE_MAX_MB: values below 1 (or unparseable)
+// fall back to the default of 20; values above 49 are clamped to 49.
+func getEnvArchiveMaxMB() int64 {
+	mb := getEnvInt("ARCHIVE_MAX_MB", defaultArchiveMaxMB)
+	if mb < 1 {
+		return defaultArchiveMaxMB
+	}
+	if mb > maxArchiveMaxMB {
+		return maxArchiveMaxMB
+	}
+	return mb
 }
 
 func getEnvDuration(key string, fallback time.Duration) time.Duration {
