@@ -56,29 +56,6 @@ func (r *PasteRepository) IDExists(ctx context.Context, id string) (bool, error)
 	return exists, nil
 }
 
-func (r *PasteRepository) GetExpiredIDs(ctx context.Context) ([]string, error) {
-	rows, err := r.pool.Query(ctx,
-		`SELECT id FROM pastes WHERE expires_at IS NOT NULL AND expires_at < NOW()`,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("query expired pastes: %w", err)
-	}
-	defer rows.Close()
-
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("scan expired paste id: %w", err)
-		}
-		ids = append(ids, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate expired paste rows: %w", err)
-	}
-	return ids, nil
-}
-
 // GetExpired returns expired pastes along with their stored object ids so the
 // caller can remove the backing objects before deleting the rows.
 func (r *PasteRepository) GetExpired(ctx context.Context) ([]model.ExpiredPaste, error) {

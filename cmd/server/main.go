@@ -103,7 +103,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	pasteCleanup := scheduler.NewPasteCleanup(pasteRepo)
+	pasteCleanup := scheduler.NewPasteCleanup(pasteRepo, archiveStore)
 	if err := pasteCleanup.Start(cfg.CleanupInterval); err != nil {
 		slog.Error("failed to start paste cleanup scheduler", "error", err)
 		os.Exit(1)
