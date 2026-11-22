@@ -116,9 +116,37 @@ type railKitTrainInfoResponse struct {
 	Message string `json:"message"`
 	Error   string `json:"error"`
 	Data    struct {
-		TrainInfo TrainDetails `json:"trainInfo"`
-		Route     []TrainStop  `json:"route"`
+		TrainInfo railKitTrainDetails `json:"trainInfo"`
+		Route     []railKitTrainStop  `json:"route"`
 	} `json:"data"`
+}
+
+// RailKit's train-info response uses station fields that differ from our
+// public API names. Keep its wire shape separate so we can normalize it.
+type railKitTrainDetails struct {
+	Number          string `json:"train_no"`
+	Name            string `json:"train_name"`
+	FromStationName string `json:"from_stn_name"`
+	FromStationCode string `json:"from_stn_code"`
+	ToStationName   string `json:"to_stn_name"`
+	ToStationCode   string `json:"to_stn_code"`
+	DepartureTime   any    `json:"from_time"`
+	ArrivalTime     any    `json:"to_time"`
+	RunningDays     any    `json:"daysOfRunFromSource"`
+	TrainType       any    `json:"type"`
+	Distance        any    `json:"total_distance"`
+	Classes         any    `json:"classes"`
+}
+
+type railKitTrainStop struct {
+	StationCode string `json:"stnCode"`
+	StationName string `json:"stnName"`
+	Arrival     any    `json:"arrival"`
+	Departure   any    `json:"departure"`
+	Halt        any    `json:"halt"`
+	Distance    any    `json:"distance"`
+	Day         any    `json:"day"`
+	Platform    any    `json:"platform"`
 }
 
 // NewRailKitService creates a bounded-timeout client for RailKit REST calls.
@@ -210,5 +238,34 @@ func (s *RailKitService) LookupTrainInfo(ctx context.Context, trainNumber string
 		return nil, ErrRailKitUnavailable
 	}
 
-	return &TrainInfo{TrainInfo: result.Data.TrainInfo, Route: result.Data.Route}, nil
+	providerTrain := result.Data.TrainInfo
+	train := TrainDetails{
+		Number:        providerTrain.Number,
+		Name:          providerTrain.Name,
+		Origin:        providerTrain.FromStationName,
+		Destination:   providerTrain.ToStationName,
+		FromStation:   providerTrain.FromStationCode,
+		ToStation:     providerTrain.ToStationCode,
+		DepartureTime: providerTrain.DepartureTime,
+		ArrivalTime:   providerTrain.ArrivalTime,
+		RunningDays:   providerTrain.RunningDays,
+		TrainType:     providerTrain.TrainType,
+		Distance:      providerTrain.Distance,
+		Classes:       providerTrain.Classes,
+	}
+	stops := make([]TrainStop, 0, len(result.Data.Route))
+	for _, providerStop := range result.Data.Route {
+		stops = append(stops, TrainStop{
+			StationCode: providerStop.StationCode,
+			StationName: providerStop.StationName,
+			Arrival:     providerStop.Arrival,
+			Departure:   providerStop.Departure,
+			Halt:        providerStop.Halt,
+			Distance:    providerStop.Distance,
+			Day:         providerStop.Day,
+			Platform:    providerStop.Platform,
+		})
+	}
+
+	return &TrainInfo{TrainInfo: train, Route: stops}, nil
 }
