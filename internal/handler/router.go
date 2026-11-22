@@ -67,8 +67,8 @@ func NewRouter(pdfHandler *PDFHandler, currencyHandler *CurrencyHandler, pasteHa
 		})
 
 		api.Route("/railway", func(railway chi.Router) {
-			railway.With(httprate.LimitByIP(10, time.Minute)).Post("/pnr", railwayHandler.LookupPNR)
-			railway.With(httprate.LimitByIP(30, time.Minute)).Get("/train/{trainNumber}", railwayHandler.LookupTrainInfo)
+			railway.With(httprate.LimitByIP(5, time.Minute)).Post("/pnr", railwayHandler.LookupPNR)
+			railway.With(httprate.LimitByIP(10, time.Minute)).Get("/train/{trainNumber}", railwayHandler.LookupTrainInfo)
 		})
 	})
 

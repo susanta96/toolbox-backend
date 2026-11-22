@@ -98,6 +98,7 @@ make run
 | `FX_HISTORY_KEEP`  | `8760h`       | Historical retention window (12 months) |
 | `RAILKIT_API_KEY` | (required for PNR) | RailKit API key; keep it private and never commit it |
 | `RAILKIT_HTTP_TIMEOUT` | `10s` | Timeout for RailKit PNR and train-info requests |
+| `RAILWAY_MONTHLY_LIMIT` | `9000` | Shared monthly cap for paid PNR and train lookups; stored in PostgreSQL and resets on the first UTC day of each month |
 | `IMAGEKIT_PRIVATE_KEY` | (empty)     | ImageKit private key for archive uploads (feature disabled when unset) |
 | `IMAGEKIT_FOLDER`  | `/toolbox-pastes` | ImageKit folder for paste archives |
 | `ARCHIVE_MAX_MB`   | `20`          | Max paste archive upload size in MB (values below 1 use 20; capped at 49 by the 50 MB request body limit) |
@@ -109,7 +110,7 @@ Paste archive uploads store zip archives in ImageKit through the `storage.Object
 
 ### Railway information
 
-Railway endpoints use the server-side `RAILKIT_API_KEY`. The key is never sent to the browser.
+Railway endpoints use the server-side `RAILKIT_API_KEY`. The key is never sent to the browser. PNR lookups are limited to 5 per IP per minute and train lookups to 10 per IP per minute. Both endpoints also share a persistent 9,000 request monthly cap by default, leaving 1,000 calls of headroom under a 10,000 call provider allowance. Configure `RAILWAY_MONTHLY_LIMIT` to change the cap. Database errors fail closed so a paid call is not made without checking the quota.
 
 ```bash
 # PNR lookup

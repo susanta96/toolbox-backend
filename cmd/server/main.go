@@ -87,7 +87,8 @@ func main() {
 	pdfHandler := handler.NewPDFHandler(pdfService, fileRepo, cfg.UploadDir, cfg.FileRetention, cfg.MaxMergeFiles)
 	currencyHandler := handler.NewCurrencyHandler(currencyService)
 	railwayService := service.NewRailKitService(cfg.RailKitAPIKey, cfg.RailKitHTTPTimeout)
-	railwayHandler := handler.NewRailwayHandler(railwayService)
+	railwayUsageRepo := repository.NewRailwayUsageRepository(pool)
+	railwayHandler := handler.NewRailwayHandler(railwayService, railwayUsageRepo, cfg.RailwayMonthlyLimit)
 	pasteHandler := handler.NewPasteHandler(pasteService, cfg.ArchiveMaxMB*1024*1024)
 	maxBodyBytes := cfg.MaxUploadSizeMB * 1024 * 1024
 	router := handler.NewRouter(pdfHandler, currencyHandler, pasteHandler, railwayHandler, maxBodyBytes, cfg.RateLimitRPM, cfg.RateLimitWindow, cfg.TrustProxyIPHeader)
