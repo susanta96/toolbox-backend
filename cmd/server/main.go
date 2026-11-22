@@ -86,9 +86,11 @@ func main() {
 	// Handlers
 	pdfHandler := handler.NewPDFHandler(pdfService, fileRepo, cfg.UploadDir, cfg.FileRetention, cfg.MaxMergeFiles)
 	currencyHandler := handler.NewCurrencyHandler(currencyService)
+	railwayService := service.NewRailKitService(cfg.RailKitAPIKey, cfg.RailKitHTTPTimeout)
+	railwayHandler := handler.NewRailwayHandler(railwayService)
 	pasteHandler := handler.NewPasteHandler(pasteService, cfg.ArchiveMaxMB*1024*1024)
 	maxBodyBytes := cfg.MaxUploadSizeMB * 1024 * 1024
-	router := handler.NewRouter(pdfHandler, currencyHandler, pasteHandler, maxBodyBytes, cfg.RateLimitRPM, cfg.RateLimitWindow, cfg.TrustProxyIPHeader)
+	router := handler.NewRouter(pdfHandler, currencyHandler, pasteHandler, railwayHandler, maxBodyBytes, cfg.RateLimitRPM, cfg.RateLimitWindow, cfg.TrustProxyIPHeader)
 
 	// Cleanup scheduler — removes expired files from disk + expired DB records
 	cleanup := scheduler.NewCleanup(fileRepo, []string{cfg.UploadDir, cfg.GeneratedDir}, cfg.FileRetention)

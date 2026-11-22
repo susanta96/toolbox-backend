@@ -96,6 +96,8 @@ make run
 | `FX_WARMUP_LIMIT`  | `30`          | Max most-requested pairs to warm each run |
 | `FX_HTTP_TIMEOUT`  | `8s`          | HTTP timeout for provider calls    |
 | `FX_HISTORY_KEEP`  | `8760h`       | Historical retention window (12 months) |
+| `RAILKIT_API_KEY` | (required for PNR) | RailKit API key; keep it private and never commit it |
+| `RAILKIT_HTTP_TIMEOUT` | `10s` | Timeout for RailKit PNR and train-info requests |
 | `IMAGEKIT_PRIVATE_KEY` | (empty)     | ImageKit private key for archive uploads (feature disabled when unset) |
 | `IMAGEKIT_FOLDER`  | `/toolbox-pastes` | ImageKit folder for paste archives |
 | `ARCHIVE_MAX_MB`   | `20`          | Max paste archive upload size in MB (values below 1 use 20; capped at 49 by the 50 MB request body limit) |
@@ -104,6 +106,22 @@ make run
 Paste archive uploads store zip archives in ImageKit through the `storage.ObjectStore` abstraction. Set `IMAGEKIT_PRIVATE_KEY` (never commit it) to enable them; `IMAGEKIT_FOLDER` and `ARCHIVE_MAX_MB` tune the target folder and size limit.
 
 ## API Endpoints
+
+### Railway information
+
+Railway endpoints use the server-side `RAILKIT_API_KEY`. The key is never sent to the browser.
+
+```bash
+# PNR lookup
+curl -X POST http://localhost:8088/api/v1/railway/pnr \
+  -H 'Content-Type: application/json' \
+  -d '{"pnr":"1234567890"}'
+
+# Train schedule and route
+curl http://localhost:8088/api/v1/railway/train/12178
+```
+
+The train response includes `data.trainInfo` and an ordered `data.route` list. Railway results are provided by RailKit; confirm travel-critical changes with official railway channels.
 
 ### `GET /hello`
 Health check / demo endpoint.
