@@ -11,7 +11,7 @@ import (
 )
 
 // NewRouter sets up all HTTP routes and middleware.
-func NewRouter(pdfHandler *PDFHandler, currencyHandler *CurrencyHandler, pasteHandler *PasteHandler, maxBodyBytes int64, rateLimitRPM int, rateLimitWindow time.Duration, trustProxyIPHeader bool) *chi.Mux {
+func NewRouter(pdfHandler *PDFHandler, currencyHandler *CurrencyHandler, pasteHandler *PasteHandler, railwayHandler *RailwayHandler, maxBodyBytes int64, rateLimitRPM int, rateLimitWindow time.Duration, trustProxyIPHeader bool) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -64,6 +64,11 @@ func NewRouter(pdfHandler *PDFHandler, currencyHandler *CurrencyHandler, pasteHa
 			// IP comes from X-Real-IP (only when trustProxyIPHeader is set).
 			paste.With(httprate.Limit(5, time.Hour, httprate.WithKeyFuncs(clientIPKey(trustProxyIPHeader)))).Post("/archive", pasteHandler.CreateArchive)
 			paste.Get("/{id}", pasteHandler.GetByID)
+		})
+
+		api.Route("/railway", func(railway chi.Router) {
+			railway.With(httprate.LimitByIP(10, time.Minute)).Post("/pnr", railwayHandler.LookupPNR)
+			railway.With(httprate.LimitByIP(30, time.Minute)).Get("/train/{trainNumber}", railwayHandler.LookupTrainInfo)
 		})
 	})
 
