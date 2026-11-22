@@ -8,25 +8,26 @@ import (
 
 // Config holds all application configuration loaded from environment variables.
 type Config struct {
-	Port               string
-	DatabaseURL        string
-	UploadDir          string
-	GeneratedDir       string
-	MaxUploadSizeMB    int64
-	MaxMergeFiles      int
-	CleanupInterval    time.Duration
-	FileRetention      time.Duration
-	FXProviderURL      string
-	FXCacheTTL         time.Duration
-	FXStaleWindow      time.Duration
-	FXWarmupEvery      time.Duration
-	FXWarmupLimit      int
-	FXHTTPTimeout      time.Duration
-	FXHistoryKeep      time.Duration
-	RailKitAPIKey      string
-	RailKitHTTPTimeout time.Duration
-	RateLimitRPM       int
-	RateLimitWindow    time.Duration
+	Port                string
+	DatabaseURL         string
+	UploadDir           string
+	GeneratedDir        string
+	MaxUploadSizeMB     int64
+	MaxMergeFiles       int
+	CleanupInterval     time.Duration
+	FileRetention       time.Duration
+	FXProviderURL       string
+	FXCacheTTL          time.Duration
+	FXStaleWindow       time.Duration
+	FXWarmupEvery       time.Duration
+	FXWarmupLimit       int
+	FXHTTPTimeout       time.Duration
+	FXHistoryKeep       time.Duration
+	RailKitAPIKey       string
+	RailKitHTTPTimeout  time.Duration
+	RateLimitRPM        int
+	RateLimitWindow     time.Duration
+	RailwayMonthlyLimit int
 
 	ImageKitPrivateKey string
 	ImageKitFolder     string
@@ -40,26 +41,34 @@ type Config struct {
 
 // Load reads configuration from environment variables with sensible defaults.
 func Load() *Config {
+	railwayMonthlyLimit := int(getEnvInt("RAILWAY_MONTHLY_LIMIT", 9000))
+	if railwayMonthlyLimit < 1 {
+		railwayMonthlyLimit = 9000
+	}
+	if railwayMonthlyLimit > 10000 {
+		railwayMonthlyLimit = 10000
+	}
 	return &Config{
-		Port:               getEnv("PORT", "8080"),
-		DatabaseURL:        getEnv("DATABASE_URL", ""),
-		UploadDir:          getEnv("UPLOAD_DIR", "./uploads"),
-		GeneratedDir:       getEnv("GENERATED_DIR", "./generated"),
-		MaxUploadSizeMB:    getEnvInt("MAX_UPLOAD_SIZE_MB", 50),
-		MaxMergeFiles:      int(getEnvInt("MAX_MERGE_FILES", 10)),
-		CleanupInterval:    getEnvDuration("CLEANUP_INTERVAL", 10*time.Minute),
-		FileRetention:      getEnvDuration("FILE_RETENTION", 1*time.Hour),
-		FXProviderURL:      getEnv("FX_PROVIDER_URL", "https://api.frankfurter.dev"),
-		FXCacheTTL:         getEnvDuration("FX_CACHE_TTL", 30*time.Minute),
-		FXStaleWindow:      getEnvDuration("FX_STALE_WINDOW", 6*time.Hour),
-		FXWarmupEvery:      getEnvDuration("FX_WARMUP_EVERY", 30*time.Minute),
-		FXWarmupLimit:      int(getEnvInt("FX_WARMUP_LIMIT", 30)),
-		FXHTTPTimeout:      getEnvDuration("FX_HTTP_TIMEOUT", 8*time.Second),
-		FXHistoryKeep:      getEnvDuration("FX_HISTORY_KEEP", 8760*time.Hour),
-		RailKitAPIKey:      getEnv("RAILKIT_API_KEY", ""),
-		RailKitHTTPTimeout: getEnvDuration("RAILKIT_HTTP_TIMEOUT", 10*time.Second),
-		RateLimitRPM:       int(getEnvInt("RATE_LIMIT_RPM", 60)),
-		RateLimitWindow:    getEnvDuration("RATE_LIMIT_WINDOW", 1*time.Minute),
+		Port:                getEnv("PORT", "8080"),
+		DatabaseURL:         getEnv("DATABASE_URL", ""),
+		UploadDir:           getEnv("UPLOAD_DIR", "./uploads"),
+		GeneratedDir:        getEnv("GENERATED_DIR", "./generated"),
+		MaxUploadSizeMB:     getEnvInt("MAX_UPLOAD_SIZE_MB", 50),
+		MaxMergeFiles:       int(getEnvInt("MAX_MERGE_FILES", 10)),
+		CleanupInterval:     getEnvDuration("CLEANUP_INTERVAL", 10*time.Minute),
+		FileRetention:       getEnvDuration("FILE_RETENTION", 1*time.Hour),
+		FXProviderURL:       getEnv("FX_PROVIDER_URL", "https://api.frankfurter.dev"),
+		FXCacheTTL:          getEnvDuration("FX_CACHE_TTL", 30*time.Minute),
+		FXStaleWindow:       getEnvDuration("FX_STALE_WINDOW", 6*time.Hour),
+		FXWarmupEvery:       getEnvDuration("FX_WARMUP_EVERY", 30*time.Minute),
+		FXWarmupLimit:       int(getEnvInt("FX_WARMUP_LIMIT", 30)),
+		FXHTTPTimeout:       getEnvDuration("FX_HTTP_TIMEOUT", 8*time.Second),
+		FXHistoryKeep:       getEnvDuration("FX_HISTORY_KEEP", 8760*time.Hour),
+		RailKitAPIKey:       getEnv("RAILKIT_API_KEY", ""),
+		RailKitHTTPTimeout:  getEnvDuration("RAILKIT_HTTP_TIMEOUT", 10*time.Second),
+		RateLimitRPM:        int(getEnvInt("RATE_LIMIT_RPM", 60)),
+		RateLimitWindow:     getEnvDuration("RATE_LIMIT_WINDOW", 1*time.Minute),
+		RailwayMonthlyLimit: railwayMonthlyLimit,
 
 		ImageKitPrivateKey: getEnv("IMAGEKIT_PRIVATE_KEY", ""),
 		ImageKitFolder:     getEnv("IMAGEKIT_FOLDER", "/toolbox-pastes"),

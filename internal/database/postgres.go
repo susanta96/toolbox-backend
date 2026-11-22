@@ -121,6 +121,16 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 		return fmt.Errorf("run migration (paste file columns): %w", err)
 	}
 
+	railwayUsageQuery := `
+	CREATE TABLE IF NOT EXISTS railway_monthly_usage (
+		month_start DATE PRIMARY KEY,
+		request_count INTEGER NOT NULL DEFAULT 0 CHECK (request_count >= 0)
+	);
+	`
+	if _, err := pool.Exec(ctx, railwayUsageQuery); err != nil {
+		return fmt.Errorf("run migration (railway monthly usage): %w", err)
+	}
+
 	pasteStorageQuery := `
 	ALTER TABLE pastes ADD COLUMN IF NOT EXISTS storage_file_id TEXT;
 	ALTER TABLE pastes ADD COLUMN IF NOT EXISTS storage_url TEXT;
